@@ -1,0 +1,1 @@
+# especificação do protocolo (entrega 5.2)
