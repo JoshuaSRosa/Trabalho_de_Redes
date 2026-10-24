@@ -1,0 +1,339 @@
+================================================================================
+ESPECIFICAÇÃO DO TRABALHO — JOGO DA VELHA MULTIPLAYER
+Documento de definições de projeto
+Versão: rascunho inicial (a ser refinado durante o desenvolvimento)
+================================================================================
+
+1. DESCRIÇÃO DA APLICAÇÃO
+--------------------------------------------------------------------------------
+Jogo da velha multiplayer, com múltiplas partidas simultâneas, matchmaking
+automático e suporte a reconexão. Dois jogadores são pareados por uma fila
+no servidor e disputam uma série "melhor de N" partidas (N escolhido pelo
+jogador ao entrar na fila: 1, 3 ou 5).
+
+Funcionalidades mínimas previstas:
+  - Conexão de múltiplos jogadores simultaneamente;
+  - Identificação de jogador por nickname + token de sessão;
+  - Matchmaking automático por modo de jogo (best_of);
+  - Partidas simultâneas no servidor;
+  - Confirmação de jogada antes de efetivá-la (evita cliques errados);
+  - Reconexão do jogador a uma partida em andamento (janela de 5 minutos);
+  - Encerramento da partida em caso de timeout de reconexão;
+  - Tratamento de mensagens inválidas e desconexões;
+  - Heartbeat (PING/PONG) para detecção de conexões mortas.
+
+Funcionalidades adicionais consideradas (a definir, escopo opcional):
+  - Chat entre os jogadores da mesma partida;
+  - Ranking/estatísticas persistidas em arquivo;
+  - Lista de partidas em andamento.
+
+2. ARQUITETURA
+--------------------------------------------------------------------------------
+Arquitetura: Cliente-servidor.
+
+Justificativa:
+  - Necessidade de estado centralizado da partida (tabuleiro, turno, placar,
+    quem desconectou);
+  - Necessidade de matchmaking (pareamento entre jogadores);
+  - Necessidade de backup de partida para reconexão;
+  - P2P dificultaria os três pontos acima sem trazer benefícios relevantes
+    para um jogo em turnos.
+
+Responsabilidades:
+  - Servidor:
+      * Aceitar múltiplos clientes;
+      * Autenticar/identificar jogadores;
+      * Manter filas de matchmaking por modo;
+      * Manter estado de cada partida em andamento;
+      * Validar jogadas;
+      * Coordenar turnos;
+      * Detectar desconexões, permitir reconexão dentro da janela definida;
+      * Notificar resultados e encerrar partidas.
+  - Cliente:
+      * Conectar-se ao servidor;
+      * Identificar-se (nickname + token);
+      * Escolher modo de jogo e entrar na fila;
+      * Exibir o tabuleiro e receber as jogadas;
+      * Enviar propostas de jogada e confirmações;
+      * Exibir mensagens de erro e status.
+
+3. PROTOCOLO DE TRANSPORTE
+--------------------------------------------------------------------------------
+Transporte: TCP.
+
+Justificativa:
+  - Jogo em turnos, mensagens pequenas e de baixa frequência;
+  - Necessidade de entrega confiável e ordenada (uma jogada perdida ou
+    recebida fora de ordem corrompe o estado da partida);
+  - Latência não é crítica no contexto do jogo;
+  - Não há ganho real em usar UDP; mistura de TCP/UDP não se justifica.
+
+Codificação das mensagens: JSON, uma mensagem por linha (delimitada por \n).
+Justificativa: legível, fácil de depurar, fácil de documentar.
+
+4. MODELO DE CONCORRÊNCIA (SERVIDOR)
+--------------------------------------------------------------------------------
+Duas camadas de threads:
+
+  a) Thread por cliente conectado:
+       - Responsável por ler o socket e enfileirar mensagens recebidas;
+       - Evita bloqueio do servidor em uma conexão específica.
+
+  b) Thread por partida:
+       - Responsável por controlar o estado da partida (tabuleiro, turno,
+         placar da série, timeouts de reconexão).
+
+Comunicação entre camadas:
+  - Filas (queue.Queue) por cliente e por partida;
+  - Locks para acesso ao estado compartilhado (dicionário de sessões,
+    dicionário de partidas ativas, filas de matchmaking).
+
+Justificativa: separa I/O de rede da lógica de estado, evitando condições
+de corrida e mantendo o código testável.
+
+Observação: uma alternativa seria usar selectors/asyncio no servidor. A
+escolha por threads foi feita por simplicidade didática e por aderência ao
+escopo do trabalho. Caso o grupo opte por mudar, o restante do documento
+permanece válido.
+
+5. ESTRUTURA DO CÓDIGO (CLIENTE)
+--------------------------------------------------------------------------------
+Três camadas desacopladas:
+
+  - UI (terminal agora, GUI depois):
+      * Exibe estado e coleta entrada do usuário;
+      * Nunca chama socket diretamente;
+      * Recebe eventos via fila/callback.
+
+  - Cliente (regras e estado local):
+      * Mantém visão local da partida;
+      * Orquestra envio de mensagens;
+      * Intermediário entre UI e rede.
+
+  - Rede (socket + thread de leitura):
+      * Serializa/desserializa mensagens;
+      * Envia e recebe;
+      * Não imprime nada de UI.
+
+Regra prática: trocar a UI (terminal → tkinter) deve exigir alterações
+apenas na camada de UI.
+
+Interface inicial: terminal.
+Interface futura (opcional): tkinter / customtkinter (nativo, sem
+dependência externa). Justificativa para não usar navegador: WebSocket/HTTP
+abstrairiam justamente a camada de sockets que o trabalho exige.
+
+6. IDENTIFICAÇÃO E SESSÃO
+--------------------------------------------------------------------------------
+Identificação baseada em nickname + token de sessão (UUID).
+
+Fluxo:
+  1. Cliente conecta e envia HELLO com nickname.
+  2. Servidor responde:
+       - WELCOME com session_token (se nickname aceito), ou
+       - ERROR (nickname em uso e sem token válido, ou mensagem inválida).
+  3. Cliente salva session_token localmente (arquivo de sessão).
+  4. Em reconexão, cliente envia RECONNECT com nickname + session_token.
+  5. Servidor valida par (nickname, token):
+       - Se válido e jogador em partida: retoma a partida;
+       - Se válido e jogador aguardando: retoma a fila;
+       - Se inválido: trata como nova sessão (sujeito a política de
+         nickname).
+
+Justificativa para não usar IP:
+  - IP dinâmico e CGNAT tornam IP instável como identificador;
+  - NAT compartilhado faz dois jogadores distintos terem o mesmo IP público
+    (provável em laboratório);
+  - Spoofing trivial em rede local;
+  - Token de sessão resolve identificação, reconexão (mesmo trocando de
+    rede) e prevenção de colisão de nickname.
+
+Política de nickname em uso:
+  - Se nickname já está associado a uma sessão ativa e o cliente não
+    apresenta o token correspondente, o servidor rejeita com ERROR até que
+    a sessão anterior expire (janela de reconexão de 5 minutos).
+
+Armazenamento:
+  - Em memória (dict protegido por lock) no servidor;
+  - Não há banco de dados no escopo mínimo.
+
+7. MATCHMAKING
+--------------------------------------------------------------------------------
+Fila por modo de jogo. Cada modo é definido pelo valor de best_of
+(1, 3 ou 5). Jogadores só são pareados com best_of igual.
+
+Entrada na fila: (nickname, best_of, timestamp_entrada).
+
+Comportamento:
+  - Ao entrar na fila, servidor responde QUEUE_JOINED;
+  - Enquanto aguarda, cliente recebe QUEUE_WAITING (informativo);
+  - Ao parear, servidor cria a partida e envia MATCH_FOUND para ambos,
+    contendo oponente, best_of e identificador da partida;
+  - Ao sair da fila, cliente envia QUEUE_LEAVE.
+
+8. REGRAS DO JOGO (ESCOPO)
+--------------------------------------------------------------------------------
+  - Tabuleiro 3x3, jogadores X e O (atribuídos pelo servidor);
+  - Série melhor de N (N ∈ {1, 3, 5}), conforme escolha do jogador;
+  - Cada rodada é uma partida de jogo da velha;
+  - Vence a rodada quem fizer três em linha; empate se tabuleiro cheio;
+  - Vence a série quem atingir ceil(N/2) vitórias na rodada;
+  - Turnos alternados, X começa na primeira rodada; alternância entre
+    rodadas a definir (proposta: vencedor da rodada anterior começa a
+    próxima; em empate, alterna).
+
+Fluxo de jogada (com confirmação):
+  1. Jogador do turno envia MOVE_PROPOSE com posição escolhida;
+  2. Servidor valida (turno, célula vazia, partida ativa);
+  3. Servidor responde ao proponente:
+       - MOVE_PROPOSED (aguardando confirmação), ou
+       - ERROR (jogada inválida).
+  4. Jogador confirma com MOVE_CONFIRM ou cancela com MOVE_CANCEL;
+  5. Em MOVE_CONFIRM, servidor aplica a jogada, atualiza estado e envia
+     BOARD_UPDATE para ambos;
+  6. Em MOVE_CANCEL, servidor descarta a proposta e o turno permanece.
+
+Justificativa: evita cliques errados; adiciona mensagens e estados ao
+protocolo, o que é coerente com o escopo do trabalho.
+
+9. MENSAGENS DO PROTOCOLO (RASCUNHO INICIAL)
+--------------------------------------------------------------------------------
+Formato geral (JSON por linha):
+
+  {"type": "<TIPO>", "seq": <int>, "payload": { ... }}
+
+Campos:
+  - type: identificador da mensagem (ver tabela abaixo);
+  - seq: número de sequência do cliente/servidor (opcional em fases
+    iniciais; útil para depuração e ordenação);
+  - payload: campos específicos da mensagem.
+
+--- 9.1 Conexão / Sessão ---
+  HELLO            { nickname }
+    → Enviada pelo cliente na conexão.
+
+  WELCOME          { nickname, session_token, player_id }
+    → Enviada pelo servidor quando a sessão é aceita.
+
+  RECONNECT        { nickname, session_token }
+    → Enviada pelo cliente para retomar sessão anterior.
+
+  RECONNECT_OK     { nickname, in_game: bool, game_id?: string }
+    → Servidor confirma reconexão e informa estado (fila ou partida).
+
+  RECONNECT_FAIL   { reason }
+    → Token inválido, sessão expirada ou desconhecida.
+
+  ERROR            { code, message }
+    → Mensagem genérica de erro; usada em várias situações.
+
+  PING             { }
+  PONG             { }
+    → Heartbeat; enviado periodicamente pelo cliente; servidor responde.
+
+--- 9.2 Matchmaking ---
+  QUEUE_JOIN       { best_of: 1|3|5 }
+  QUEUE_JOINED     { best_of }
+  QUEUE_WAITING    { }
+  QUEUE_LEAVE      { }
+  QUEUE_LEFT       { }
+  MATCH_FOUND      { game_id, opponent, best_of, player_symbol }
+
+--- 9.3 Jogo ---
+  MOVE_PROPOSE     { game_id, row, col }
+  MOVE_PROPOSED    { row, col }
+  MOVE_CONFIRM     { game_id }
+  MOVE_CANCEL      { game_id }
+  MOVE_REJECTED    { reason }             # erro de validação
+  BOARD_UPDATE     { board, current_turn, round, score }
+  ROUND_OVER       { winner: "X"|"O"|"draw", board, score }
+  MATCH_OVER       { winner: nickname|null, score }
+  OPPONENT_DISCONNECTED { reconnect_deadline_s }
+  OPPONENT_RECONNECTED  { }
+
+--- 9.4 Encerramento ---
+  GAME_ABORTED     { reason }
+  QUIT             { }
+  BYE              { }
+
+--- 9.5 Mensagens inválidas ---
+  Qualquer mensagem com:
+    - JSON malformado;
+    - type ausente ou desconhecido;
+    - payload com campos obrigatórios faltando ou fora do domínio;
+  → servidor responde ERROR { code, message } e mantém o estado atual.
+  → se a violação for grave e repetida, o servidor pode encerrar a conexão.
+
+10. SEQUÊNCIA ESPERADA (EXEMPLOS RESUMIDOS)
+--------------------------------------------------------------------------------
+Conexão nova:
+  C → HELLO(nickname)
+  S → WELCOME(session_token, ...) | ERROR
+
+Entrar na fila e ser pareado:
+  C → QUEUE_JOIN(best_of=3)
+  S → QUEUE_JOINED(best_of=3)
+  S → QUEUE_WAITING                          (enquanto aguarda)
+  S → MATCH_FOUND(game_id, opponent, ...)    (quando pareado)
+
+Jogada com confirmação:
+  C → MOVE_PROPOSE(row, col)
+  S → MOVE_PROPOSED(row, col)
+  C → MOVE_CONFIRM
+  S → BOARD_UPDATE(board, current_turn, ...)
+
+Desconexão e reconexão:
+  [cliente cai]
+  S → OPPONENT_DISCONNECTED(reconnect_deadline_s=300)   (para o oponente)
+  [cliente reconecta]
+  C → RECONNECT(nickname, session_token)
+  S → RECONNECT_OK(in_game=true, game_id=...)
+  S → BOARD_UPDATE(board, current_turn, ...)            (ressincroniza)
+  S → OPPONENT_RECONNECTED                              (para o oponente)
+
+Timeout de reconexão:
+  [5 min sem reconexão]
+  S → MATCH_OVER(winner=<oponente>, ...)                (para o oponente)
+  S → GAME_ABORTED(reason="opponent_timeout")           (para o jogador que caiu, se reconectar depois)
+
+11. TRATAMENTO DE ERROS E DESCONEXÕES
+--------------------------------------------------------------------------------
+  - Mensagem inválida → ERROR, estado preservado;
+  - Jogada fora do turno, célula ocupada, posição fora do tabuleiro →
+    MOVE_REJECTED;
+  - Cliente desconecta durante a partida → servidor inicia janela de
+    reconexão (5 min) e notifica o oponente;
+  - Cliente não reconecta dentro da janela → partida encerrada, vitória
+    do oponente;
+  - Servidor detecta queda por ausência de PONG dentro de timeout
+    configurável (ex.: 30 s sem PONG = conexão considerada morta);
+  - Erros de protocolo repetidos → conexão encerrada com mensagem
+    adequada.
+
+Parâmetros configuráveis (documentar no README):
+  - Janela de reconexão: 300 s (5 min);
+  - Intervalo de PING: 15 s;
+  - Timeout de PONG: 30 s.
+
+12. ESCOPO E LIMITAÇÕES (A DOCUMENTAR NO README)
+--------------------------------------------------------------------------------
+  - Sem banco de dados; estado em memória;
+  - Persistência opcional (ranking/estatísticas) via arquivo JSON;
+  - Interface inicial em terminal; GUI opcional;
+  - Sem criptografia em trânsito (fora do escopo da disciplina);
+  - Sem balanceamento de carga / cluster.
+
+13. PENDÊNCIAS E DECISÕES FUTURAS
+--------------------------------------------------------------------------------
+  - Definir regra exata de alternância de quem começa entre rodadas;
+  - Definir se o chat será implementado (mensagens já previstas no
+    protocolo);
+  - Definir política de persistência de ranking (se houver);
+  - Refinar formato dos campos (ex.: representação do tabuleiro como lista
+    de 9 posições vs. matriz);
+  - Definir tempo máximo de inatividade por jogador durante o turno
+    (proposta inicial: 60 s por jogada, com aviso ao jogador).
+
+================================================================================
+FIM DO DOCUMENTO
+================================================================================
