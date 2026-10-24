@@ -1,6 +1,6 @@
 CASA_VAZIA = ' '  #Representação de uma casa Vazia no tabuleiro do jogo da velha
 
-class PARTIDA:
+class JOGO_DA_VELHA:
     #características de uma partida de jogo da velha único
     def __init__(self, jogador1, jogador2):
         self.jogador1 = jogador1 # Player 1 - X
@@ -22,7 +22,7 @@ class PARTIDA:
         if self.encerrada:
             raise ValueError("Partiada já encerrada") # Avisa que a partida já foi encerrada
         if  jogador != self.jogador_atual(): # Verifica se é a vez do jogador 
-            raise ValueError("Não é a vez do jogador 1") # Avisa que não é a vez do jogador 1
+            raise ValueError("É a vez do seu adversário") # Avisa que não é a vez do jogador
         if not ((0 <= linha < 3) and (0 <= coluna < 3)): # Verifica se a jogada está dentro do tabuleiro
             raise ValueError("Jogada fora do tabuleiro") # Avisa que a jogada está fora do tabuleiro
         if self.tabuleiro[linha][coluna] != CASA_VAZIA: # Verifica se a casa está vazia
@@ -68,15 +68,68 @@ class PARTIDA:
         if (self.tabuleiro[0][2] == self.tabuleiro[1][1] == self.tabuleiro[2][0]) and (self.tabuleiro[0][2] != CASA_VAZIA):
             return self.tabuleiro[2][0] # Retorna o símbolo do vencedor
         
-'''
-class JOGO:
-    #características de um jogo com melhor de 3 ou 5 de partidas de jogo da velha
+class PARTIDA_MD:
+    # características de uma partida com melhor de 3 ou 5 partidas de jogo da velha
     # a cada partida da MD3 ou MD5, os jogadores alternam entre primeio e segundo jogador
     # abre uma nova PARTIDA a cada rodada da MD3/5
-    def __init__(self):
-        self. partidadas = [] #Lista de partidas jogadas
-        self.rodada = 0 # Rodada da MD3/5 atual
-        self.placar = {'jogador1': 0,'jogador2': 0} #placar do jogo MD3/5
-        self.vencedor =  None # Vencedor do jogo MD3/5: P1, P2 ou empate
-        '''
+    def __init__(self, jogador1, jogador2, melhord):
+        self.partidas = [] #Lista de partidas jogadas
+        self.jogador1 = jogador1
+        self.jogador2 = jogador2
+        self.melhorD = melhord # Melhor de 3 ou 5
+        self.vitorias_necessarias = (melhord // 2) + 1
+        self.placar = {'jogador1': 0,'jogador2': 0,'empates': 0} #placar do jogo MD3/5
+        self.winner = None # Vencedor do jogo MD3/5: P1, P2 ou empate
+        self.finished = False # Verifica se a MD3/5 terminou ou não
+        self.partida_atual = None # Partida atual da série MD3/5 atual
+        self.partida_numero = 0 #Numeração da partida atual da série
+        self.iniciar_proxima_partida() #Inicia a primeira partida da série
 
+    def iniciar_proxima_partida(self): # Inicia a próxima partida
+        # Alterna o símbolo dos jogadores a cada partida da MD3/5
+        if self.partida_numero % 2 == 0:
+            self.partida_atual = JOGO_DA_VELHA(self.jogador1,self.jogador2)
+        else:
+            self.partida_atual = JOGO_DA_VELHA(self.jogador2,self.jogador1)
+        self.partidas.append(self.partida_atual) #Adiciona a partida a lista de histórico
+
+    def jogador_atual(self):
+        return self.partida_atual.jogador_atual() # Atualiza a jogada da partida atual
+    
+    def inserir_jogada(self, jogador, linha, coluna):
+        if self.finished:
+            raise ValueError("A série já foi encerrada")
+        self.partida_atual.inserir_jogada(jogador, linha, coluna) # Realiza a jogada na partida atual
+        if self.partida_atual.encerrada: # Garantia de partida finaizada antes do placar atualizar
+            self.registrar_resultado()
+
+    def registrar_resultado(self): # Atualiza o placar da partida MD3/5 após o término de uma partida
+        self.partida_numero += 1 # Incrementa o número da partida
+          
+        if self.partida_atual.vencedor == self.partida_atual.jogador1:
+            self.placar['jogador1'] += 1
+        elif self.partida_atual.vencedor == self.partida_atual.jogador2:
+            self.placar['jogador2'] += 1
+        elif self.partida_atual.vencedor == 'empate':
+            self.placar['empates'] += 1
+            
+        if (self.placar['jogador1'] >= self.vitorias_necessarias) or (self.placar['jogador2'] >= self.vitorias_necessarias):
+            self.finished = True
+            if self.placar['jogador1'] > self.placar['jogador2']:
+                self.winner = self.jogador1
+            elif self.placar['jogador2'] > self.placar['jogador1']:
+                self.winner = self.jogador2
+
+        elif(self.partida_numero >= self.melhorD):
+            self.finished = True
+            if self.placar['jogador1'] > self.placar['jogador2']:
+                self.winner = self.jogador1
+            elif self.placar['jogador2'] > self.placar['jogador1']:
+                self.winner = self.jogador2
+            else:
+                self.winner = 'empate'
+        else:       
+            self.iniciar_proxima_partida()
+
+if __name__ == "main":
+    pass
