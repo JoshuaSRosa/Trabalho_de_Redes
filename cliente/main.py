@@ -1,45 +1,60 @@
 import socket
 import json
+import threading
 
 HOST = "127.0.0.1"
 PORT = 38912
 
 # Cria um socket TCP usando IPv4.
-# AF_INET = IPv4
-# SOCK_STREAM = TCP
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-# Conecta ao servidor.
 # O endereço é formado por (IP, porta).
-client.connect((HOST, PORT))
+client.connect((HOST, PORT)) # Conecta ao servidor. O endereço é formado por (IP, porta).
+print("Conectado. Digite 'sair' para encerrar.")
 
-buffer = b""
+def loop_recebimento(sock):
+    buffer = b""
+    while True:
+        msg, buffer = receber_linha(sock, buffer)
+        if msg is None:
+            print("\n[servidor encerrou]")
+            break
+        print(f"\n<< {msg}")
 
-while True:
-    # Recebe até 1024 bytes do servidor.
-    texto = input("Digite sua mensagem: ")
-    client.sendall((json.dumps({"text": texto}) + "\n").encode("utf-8"))
-
-    # recebe a resposta (mesmo padrão de buffer do servidor)
-    fechou = False
+def receber_linha(client, buffer):
     while b"\n" not in buffer:
         data = client.recv(1024)
         if data == b"":
-            fechou = True
-            break
+            return None, buffer
         buffer += data
-
-    if fechou:
-        print("Servidor encerrou a conexão")
-        break
-
     linha, buffer = buffer.split(b"\n", 1)
-    resp = json.loads(linha.decode("utf-8"))
-    print("Resposta:", resp)
+    try:
+        obj = json.loads(linha.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError): # em caso de erro, devolve msg vazia e atualiza o buffer
+        return {"_invalida" : True}, buffer
+    return obj, buffer
 
-    if texto == "sair":
-        break
+def enviar(client, obj):
+    try:  # controle de execução em caso de erros
+        client.sendall((json.dumps(obj) + "\n").encode("utf-8"))
+        return True
+    except OSError:
+        return False
+    
+def main():
 
+    t = threading.Thread(target=loop_recebimento,args=(client,),daemon=True)
+    t.start()
 
-# Fecha a conexão.
-client.close()
+    try:
+        while True:
+            texto = input("> ")
+            enviar(client, {"text": texto})
+            if texto == "sair":
+                break
+    except  (KeyboardInterrupt, BrokenPipeError):
+        pass
+    finally:
+        client.close() # Encerra a conexão do cliente com o servidor
+
+if __name__ == "__main__":
+    main()
