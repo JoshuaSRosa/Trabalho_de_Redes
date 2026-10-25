@@ -2,11 +2,11 @@ CASA_VAZIA = ' '  #Representação de uma casa Vazia no tabuleiro do jogo da vel
 
 class JOGO_DA_VELHA:
     #características de uma partida de jogo da velha único
-    def __init__(self, jogador1, jogador2):
+    def __init__(self, jogador1, jogador2, quem_comeca):
         self.jogador1 = jogador1 # Player 1 - X
         self.jogador2 = jogador2 # Player 2 - O
         self.tabuleiro = [[CASA_VAZIA for i in range(3)] for i in range(3)] # Montagem do tabuleiro
-        self.turno = 0 # Rodada atual da partida para alternar entre os jogadores
+        self.turno = 0 if quem_comeca == 'X' else 1  # Controle de troca de vez e quem inicia
         self.encerrada = False # Verificadr se a partida terminou ou não
         self.vencedor = None # Vencedor da partida: P1, P2 ou empate
 
@@ -86,11 +86,9 @@ class PARTIDA_MD:
         self.iniciar_proxima_partida() #Inicia a primeira partida da série
 
     def iniciar_proxima_partida(self): # Inicia a próxima partida
-        # Alterna o símbolo dos jogadores a cada partida da MD3/5
-        if self.partida_numero % 2 == 0:
-            self.partida_atual = JOGO_DA_VELHA(self.jogador1,self.jogador2)
-        else:
-            self.partida_atual = JOGO_DA_VELHA(self.jogador2,self.jogador1)
+        # Alterna a vez dos jogadores a cada partida da MD3/5
+        quem_comeca = 'X' if self.partida_numero % 2 == 0 else 'O'
+        self.partida_atual = JOGO_DA_VELHA(self.jogador1,self.jogador2,quem_comeca)
         self.partidas.append(self.partida_atual) #Adiciona a partida a lista de histórico
 
     def jogador_atual(self):
@@ -131,5 +129,41 @@ class PARTIDA_MD:
         else:       
             self.iniciar_proxima_partida()
 
-if __name__ == "main":
-    pass
+if __name__ == "__main__":
+    p1, p2 = "P1", "P2"
+    md = 3
+    teste = PARTIDA_MD(p1, p2, md)
+
+    while not teste.finished:
+        partida_antes = teste.partida_atual   # referência à partida atual ANTES da jogada
+        jogador_atual = teste.jogador_atual()
+
+        print(f"\n--- Jogo {teste.partida_numero + 1} de {md} ---")
+        print(f"Vez de: {jogador_atual}")
+        for linha in teste.partida_atual.tabuleiro:
+            print(" | ".join(linha))
+
+        try:
+            linha  = int(input("Linha (1-3):  ")) - 1
+            coluna = int(input("Coluna (1-3): ")) - 1
+            teste.inserir_jogada(jogador_atual, linha, coluna)
+        except ValueError as e:
+            print(f"Jogada inválida: {e}")
+            continue    # volta ao topo do while sem avançar
+
+        # Se a partida anterior acabou de encerrar, mostra o tabuleiro final dela
+        if partida_antes.encerrada:
+            print("\nTabuleiro final do jogo:")
+            for l in partida_antes.tabuleiro:
+                print(" | ".join(l))
+            print(f"Resultado: {partida_antes.vencedor}")
+            print(f"Placar parcial: {teste.placar}")
+
+    # tabuleiro final da última partida da série
+    print("\n=== Tabuleiro final da série ===")
+    for l in teste.partida_atual.tabuleiro:
+        print(" | ".join(l))
+
+    print(f"\nMD{md} finalizada")
+    print(f"Placar: {teste.placar}")
+    print(f"Vencedor: {teste.winner}")
