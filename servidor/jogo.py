@@ -129,9 +129,12 @@ class PARTIDA_MD:
         else:       
             self.iniciar_proxima_partida()
 
+
+# Teste de funcionalidade das classes de jogo
+'''
 if __name__ == "__main__":
     p1, p2 = "P1", "P2"
-    md = 3
+    md = 5
     teste = PARTIDA_MD(p1, p2, md)
 
     while not teste.finished:
@@ -167,3 +170,4 @@ if __name__ == "__main__":
     print(f"\nMD{md} finalizada")
     print(f"Placar: {teste.placar}")
     print(f"Vencedor: {teste.winner}")
+'''

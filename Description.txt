@@ -9,7 +9,7 @@ Versão: rascunho inicial (a ser refinado durante o desenvolvimento)
 Jogo da velha multiplayer, com múltiplas partidas simultâneas, matchmaking
 automático e suporte a reconexão. Dois jogadores são pareados por uma fila
 no servidor e disputam uma série "melhor de N" partidas (N escolhido pelo
-jogador ao entrar na fila: 1, 3 ou 5).
+jogador ao entrar na fila: 3 ou 5).
 
 Funcionalidades mínimas previstas:
   - Conexão de múltiplos jogadores simultaneamente;
