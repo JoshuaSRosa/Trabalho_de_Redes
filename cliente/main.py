@@ -1,131 +1,85 @@
 import socket
 import json
 import threading
+from . import rede
+from .estado import EstadoCliente
+from . import ui_terminal as ui
+from comum import protocolo as P
 
 HOST = "127.0.0.1"
 PORT = 38912
 
-# Cria um socket TCP usando IPv4.
-client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-# O endereço é formado por (IP, porta).
-client.connect((HOST, PORT)) # Conecta ao servidor. O endereço é formado por (IP, porta).
-
-meu_jogador = None  # Qual jogador o cliente é P1 ou P2
-# Controle de concorrênca entre prints das jogadas e impressão do tabuleiro
-minha_vez = threading.Event()
-jogo_ativo = True
-
-def loop_recebimento(sock):
-    global meu_jogador, jogo_ativo
+def thread_recebimento(sock, estado):
     buffer = b""
-    while True:
-        msg, buffer = receber_linha(sock, buffer)
+    while estado.ativo:
+        try:
+            msg, buffer =  rede.receber_linha(sock, buffer)
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            print(f"\n[erro de protocolo] {e}")
+            break
         if msg is None:
-            print("\n[servidor encerrou]")
-            jogo_ativo = False
-            minha_vez.set()  # ativa a main para encerrar a conexão 
+            print(f"\n[servidor encerrou]")
+            estado.ativo = False
+            estado.minha_vez.set()
             break
+        estado.processar(msg)
+        ui.renderizar(msg, estado)
 
-        tipo = msg.get("tipo")
-
-        if tipo == "welcome":
-            meu_jogador = msg["jogador"]
-            print(f"\n[Você é o {meu_jogador}]")
-            if meu_jogador == "P1":
-                print("[Aguardando oponente conectar...]")
-        
-        elif tipo == "state":
-            print(f"\n--- Jogo {msg['partida_numero']+1} ---")
-            imprimir_tabuleiro(msg["tabuleiro"])
-            print(f"Placar: {msg['placar']}")
-            vez = msg["jogador_atual"]
-            if vez == meu_jogador:
-                print(f">>> SUA VEZ ({vez}) <<<")
-                minha_vez.set()  # libera a main para realizar o input corretamente
-            else:
-                print(f"Aguardando jogada de {vez}")
-
-        elif tipo == "erro":
-            print(f"\n[ERRO] {msg['msg']}")
-            minha_vez.set()           # libera de novo para o usuário tentar outra
-
-        elif tipo == "fim":
-            print(f"\n=== FIM DA SÉRIE ===")
-            print(f"Vencedor: {msg['vencedor']}")
-            print(f"Placar final: {msg['placar']}")
-            jogo_ativo = False      # indica que o jogo terminou
-            minha_vez.set()         # libera a main paraa encerrar o jogo
-            break
-
-        elif tipo == "desconectou":
-            print("\n[oponente desconectou]")
-
-        elif tipo == "cheio":
-            print("\n[Servidor cheio — já há uma partida em andamento]")
-            jogo_ativo = False
-            minha_vez.set()
-            break
-
-        else:
-            print(f"\n<< mensagem desconhecida: {msg}")
-
-def receber_linha(client, buffer):
-    while b"\n" not in buffer:
-        data = client.recv(1024)
-        if data == b"":
-            return None, buffer
-        buffer += data
-    linha, buffer = buffer.split(b"\n", 1)
+def loop_principal(sock, estado):
     try:
-        obj = json.loads(linha.decode("utf-8"))
-    except (json.JSONDecodeError, UnicodeDecodeError): # em caso de erro, devolve msg vazia e atualiza o buffer
-        return {"_invalida" : True}, buffer
-    return obj, buffer
-
-def enviar(client, obj):
-    try:  # controle de execução em caso de erros
-        client.sendall((json.dumps(obj) + "\n").encode("utf-8"))
-        return True
-    except OSError:
-        return False
-
-def imprimir_tabuleiro(tabuleiro):  #imprime o tabuleiro 3x3 de forma organizada e legível
-    for i, linha in enumerate(tabuleiro):
-        print(" " + " | ".join(c if c !=  ' ' else '.' for c in linha))
-        if i < 2:
-            print("---+---+---")
-    print()
-
-
-def main():
-
-    t = threading.Thread(target=loop_recebimento,args=(client,),daemon=True)
-    t.start()
-
-    try:
-        while jogo_ativo:
-            minha_vez.wait()           # espera até ser sua vez
-            if not jogo_ativo:
+        while estado.ativo:
+            estado.minha_vez.wait()
+            if not estado.ativo:
                 break
-
             try:
-                linha  = int(input("Linha (1-3):  ")) - 1
+                linha = int(input("Linha (1-3): ")) - 1
                 coluna = int(input("Coluna (1-3): ")) - 1
             except ValueError:
                 print("Digite números de 1 a 3.")
+                estado.minha_vez.set() # tenta de novo
                 continue
+            except (KeyboardInterrupt, EOFError):
+                break
 
-            if not (0 <= linha < 3 and 0 <= coluna < 3):
+            if not ((0 <= linha < 3) and (0 <= coluna < 3)):
                 print("Fora do tabuleiro (use 1-3).")
+                estado.minha_vez.set() # tenta de novo
                 continue
 
-            minha_vez.clear()  # limpa antes de enviar
-            if not enviar(client, {"linha": linha, "coluna": coluna}):
+            if not rede.enviar(sock, {P.LINHA: linha, P.COLUNA: coluna}):
                 print("[conexão perdida]")
                 break
-    except (KeyboardInterrupt, EOFError):
-        pass
     finally:
+        estado.ativo = False
+
+def main():
+    while True:
+        try:
+            melhor_de = int(input("Melhor de (1, 3 ou 5): "))
+            if melhor_de in (1, 3, 5):
+                break
+        except ValueError:
+            pass
+        print("Valor inválido.")
+
+    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client.connect((HOST, PORT))
+    print(f"Conectado. Entrando na fila (melhor de {melhor_de})...")
+
+    estado = EstadoCliente()
+    estado.entrar_na_fila(melhor_de)
+
+    if not rede.enviar(client, {P.TIPO: P.FILA, P.MELHOR_DE: melhor_de}):
+        print("[falha ao enviar fila]")
+        client.close()
+        return
+
+    threading.Thread(target=thread_recebimento, args=(client, estado),daemon=True).start()
+
+    try:
+        loop_principal(client, estado)
+    finally:
+        estado.ativo = False
         client.close()
 
 
