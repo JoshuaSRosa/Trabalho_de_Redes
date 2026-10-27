@@ -117,7 +117,7 @@ def estado_atual(md): # Função auxiliar para thread ver o estado do jogo
     p = md.partida_atual
     return {
         "tipo": "state",
-        "board": p.tabuleiro,
+        "tabuleiro": p.tabuleiro,
         "jogador_atual": md.jogador_atual(),
         "placar": dict(md.placar),
         "partida_numero": md.partida_numero,

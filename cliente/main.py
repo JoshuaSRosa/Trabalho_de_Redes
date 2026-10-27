@@ -11,14 +11,19 @@ client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 client.connect((HOST, PORT)) # Conecta ao servidor. O endereço é formado por (IP, porta).
 
 meu_jogador = None  # Qual jogador o cliente é P1 ou P2
+# Controle de concorrênca entre prints das jogadas e impressão do tabuleiro
+minha_vez = threading.Event()
+jogo_ativo = True
 
 def loop_recebimento(sock):
-    global meu_jogador
+    global meu_jogador, jogo_ativo
     buffer = b""
     while True:
         msg, buffer = receber_linha(sock, buffer)
         if msg is None:
             print("\n[servidor encerrou]")
+            jogo_ativo = False
+            minha_vez.set()  # ativa a main para encerrar a conexão 
             break
 
         tipo = msg.get("tipo")
@@ -36,16 +41,20 @@ def loop_recebimento(sock):
             vez = msg["jogador_atual"]
             if vez == meu_jogador:
                 print(f">>> SUA VEZ ({vez}) <<<")
+                minha_vez.set()  # libera a main para realizar o input corretamente
             else:
                 print(f"Aguardando jogada de {vez}")
 
         elif tipo == "erro":
             print(f"\n[ERRO] {msg['msg']}")
+            minha_vez.set()           # libera de novo para o usuário tentar outra
 
         elif tipo == "fim":
             print(f"\n=== FIM DA SÉRIE ===")
             print(f"Vencedor: {msg['vencedor']}")
             print(f"Placar final: {msg['placar']}")
+            jogo_ativo = False      # indica que o jogo terminou
+            minha_vez.set()         # libera a main paraa encerrar o jogo
             break
 
         elif tipo == "desconectou":
@@ -53,6 +62,8 @@ def loop_recebimento(sock):
 
         elif tipo == "cheio":
             print("\n[Servidor cheio — já há uma partida em andamento]")
+            jogo_ativo = False
+            minha_vez.set()
             break
 
         else:
@@ -92,7 +103,11 @@ def main():
     t.start()
 
     try:
-        while True:
+        while jogo_ativo:
+            minha_vez.wait()           # espera até ser sua vez
+            if not jogo_ativo:
+                break
+
             try:
                 linha  = int(input("Linha (1-3):  ")) - 1
                 coluna = int(input("Coluna (1-3): ")) - 1
@@ -104,6 +119,7 @@ def main():
                 print("Fora do tabuleiro (use 1-3).")
                 continue
 
+            minha_vez.clear()  # limpa antes de enviar
             if not enviar(client, {"linha": linha, "coluna": coluna}):
                 print("[conexão perdida]")
                 break
