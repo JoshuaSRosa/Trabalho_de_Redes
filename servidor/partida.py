@@ -12,7 +12,7 @@ def snapshot(md): # extrai o estado atual da partida
     return {
         P.TIPO: P.STATE,
         P.TABULEIRO: p.tabuleiro,
-        P.JOGADOR_ATUAL: md.josgador_atual(),
+        P.JOGADOR_ATUAL: md.jogador_atual(),
         P.PLACAR: dict(md.placar),
         P.PARTIDA_NUM: md.partida_numero,
         P.FINALIZADA: md.finished,

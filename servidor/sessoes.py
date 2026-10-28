@@ -5,7 +5,7 @@ import queue
 import threading
 
 class Sessao:
-    def _init__(self, conn, addr):
+    def __init__(self, conn, addr):
         self.conn = conn
         self.addr = addr
         self.nickname = None   # Preenchido no login do jogador

@@ -37,7 +37,7 @@ def thread_escrita(sessao: Sessao): # Consome sessao.fila_saida e envia para o s
         obj = sessao.fila_saida.get()
         if obj is None:
             break
-        if not enviar(sessao.conn. obj):
+        if not enviar(sessao.conn, obj):
             break
 
     try:

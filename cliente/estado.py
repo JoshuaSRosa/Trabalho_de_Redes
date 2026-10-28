@@ -11,9 +11,9 @@ class EstadoCliente:
         self.ativo = True
         self.melhor_de = None
 
-    def entra_na_fila(self, melhor_de):
+    def entrar_na_fila(self, melhor_de):
         self.melhor_de = melhor_de
-        self,fase = "na_fila"
+        self.fase = "na_fila"
 
     def processar(self, msg): #Atualiza o estado com base numa mensagem do servidor. Não imprime nada
         tipo = msg.get(P.TIPO)
