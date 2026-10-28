@@ -57,7 +57,10 @@ def renderizar(msg, estado):
     if tipo == P.WELCOME:
         # Não limpa: PAREADO já limpou. Só complementa o cabeçalho.
         return
-    
+    if tipo == P.NA_FILA:
+        # não limpa — preserva o "Entrando na fila..." já impresso
+        print(f"{CIANO}[Na fila (melhor de {msg.get(P.MELHOR_DE, '?')}) — "f"aguardando oponente...]{R}")
+        return
     if tipo == P.RODADA_FIM:
         limpar()
         v = msg[P.VENCEDOR]

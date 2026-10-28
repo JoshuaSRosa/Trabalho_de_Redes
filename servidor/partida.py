@@ -6,6 +6,8 @@ import threading
 from .jogo import PARTIDA_MD
 from .sessoes import Sessao
 from comum import protocolo as P
+import traceback
+import queue as queue_module
 
 def snapshot(md): # extrai o estado atual da partida
     p = md.partida_atual
@@ -24,69 +26,82 @@ def avisar_ambos(s1, s2, obj): # envia a mensagem para ambos os jogadores
 
 # Roda Melhor De n entre s1(P1) e s2(P2). Retorna ao terminar a série MD-n
 def thread_partida(s1: Sessao, s2: Sessao, melhor_de=3):
-    md = PARTIDA_MD("P1","P2",melhor_de)
+    try:
+        md = PARTIDA_MD("P1","P2",melhor_de)
 
-    # Mapa sessão -> label do jogador
-    labels = {s1: "P1",s2: "P2"}
-    # Mapa label -> sessão (para saber quem avisar)
-    por_label = {"P1": s1, "P2": s2}
+        # Mapa sessão -> label do jogador
+        labels = {s1: "P1",s2: "P2"}
+        # Mapa label -> sessão (para saber quem avisar)
+        por_label = {"P1": s1, "P2": s2}
 
-    # associa cada sessão à partida (para caso de desconexão)
-    s1.partida = (threading.current_thread(), por_label)
-    s2.partida = (threading.current_thread(),  por_label)
+        # associa cada sessão à partida (para caso de desconexão)
+        s1.partida = (threading.current_thread(), por_label)
+        s2.partida = (threading.current_thread(),  por_label)
 
-    # boa-vindas + estado incial
-    s1.enviar({P.TIPO: P.WELCOME, P.JOGADOR: "P1"})
-    s2.enviar({P.TIPO: P.WELCOME, P.JOGADOR: "P2"})
-    avisar_ambos(s1,s2,snapshot(md))
+        # boa-vindas + estado incial
+        s1.enviar({P.TIPO: P.WELCOME, P.JOGADOR: "P1"})
+        s2.enviar({P.TIPO: P.WELCOME, P.JOGADOR: "P2"})
+        avisar_ambos(s1,s2,snapshot(md))
 
-    while not md.finished:
-        # Saber de quem é a vez não basta: precisamos saber de quem LER.
-        # Estratégia: leitura não-bloqueante alternada das duas filas.
-        # Alternativa: ler sempre da sessão do jogador_atual.        
-        atual_label = md.jogador_atual()
-        atual_sessao = por_label[atual_label]
-        outra_sessao = por_label["P2" if atual_label == "P1" else "P1"]
+        while not md.finished:
+            # Saber de quem é a vez não basta: precisamos saber de quem LER.
+            # Estratégia: leitura não-bloqueante alternada das duas filas.
+            # Alternativa: ler sempre da sessão do jogador_atual.        
+            atual_label = md.jogador_atual()
+            atual_sessao = por_label[atual_label]
+            outra_sessao = por_label["P2" if atual_label == "P1" else "P1"]
 
-        # Consome as mensagens da sessao da vez (bloqueia até chegar a vez)
-        msg = atual_sessao.fila_entrada.get()
-        if msg is None:
-            # se mensagem vazia -> encerra a sessao e avisa o outro
-            outra_sessao.enviar({P.TIPO: P.DESCONECTOU})
-            return
+            # Consome as mensagens da sessao da vez (bloqueia até chegar a vez)
+            try:
+                msg = atual_sessao.fila_partida.get(timeout=1)
+            except queue_module.Empty:
+                if not atual_sessao.viva:
+                    # sessão morta e fila sem mensagens — declara queda
+                    outra_sessao.enviar({P.TIPO: P.DESCONECTOU})
+                    return
+                continue
+            if msg is None:
+                # se mensagem vazia -> encerra a sessao e avisa o outro
+                outra_sessao.enviar({P.TIPO: P.DESCONECTOU})
+                return
 
-        linha = msg.get(P.LINHA)
-        coluna = msg.get(P.COLUNA)
-        if linha is None or coluna is None:
-            atual_sessao.enviar({P.TIPO: P.ERRO, P.MSG: "mensagem inválida"})
-            continue
+            linha = msg.get(P.LINHA)
+            coluna = msg.get(P.COLUNA)
+            if linha is None or coluna is None:
+                atual_sessao.enviar({P.TIPO: P.ERRO, P.MSG: "mensagem inválida"})
+                continue
 
-        partida_antes = md.partida_atual
-        try:
-            md.inserir_jogada(atual_label, linha, coluna)
-        except ValueError as e:
-            atual_sessao.enviar({P.TIPO: P.ERRO, P.MSG: str(e)})
-            continue
+            partida_antes = md.partida_atual
+            try:
+                md.inserir_jogada(atual_label, linha, coluna)
+            except ValueError as e:
+                atual_sessao.enviar({P.TIPO: P.ERRO, P.MSG: str(e)})
+                continue
 
-        # Se a rodada acabou, envia o tabuleiro final (antes da rodada ser substituída)
-        if partida_antes.encerrada:
-            avisar_ambos(s1, s2, {
-                P.TIPO: P.RODADA_FIM,
-                P.VENCEDOR: partida_antes.vencedor,       # "P1", "P2" ou "empate"
-                P.TABULEIRO: [linha_c[:] for linha_c in partida_antes.tabuleiro],
-                P.PLACAR: dict(md.placar),
-                P.PARTIDA_NUM: md.partida_numero - 1,     # o nº da rodada que acabou
-            })
+            # Se a rodada acabou, envia o tabuleiro final (antes da rodada ser substituída)
+            if partida_antes.encerrada:
+                avisar_ambos(s1, s2, {
+                    P.TIPO: P.RODADA_FIM,
+                    P.VENCEDOR: partida_antes.vencedor,       # "P1", "P2" ou "empate"
+                    P.TABULEIRO: [linha_c[:] for linha_c in partida_antes.tabuleiro],
+                    P.PLACAR: dict(md.placar),
+                    P.PARTIDA_NUM: md.partida_numero - 1,     # o nº da rodada que acabou
+                })
 
-        # jogada válida -> envia o STATE atualizado aos dois jogadores
-        avisar_ambos(s1, s2, snapshot(md))
+            # jogada válida -> envia o STATE atualizado aos dois jogadores
+            avisar_ambos(s1, s2, snapshot(md))
 
-    # fim da séria da MD-n
-    placar_final = dict(md.placar)
-    vencedor = md.winner
-    avisar_ambos(s1, s2, {
-        P.TIPO: P.FIM,
-        P.VENCEDOR: vencedor,
-        P.PLACAR: placar_final,
-        P.TABULEIRO: [linha_c[:] for linha_c in md.partida_atual.tabuleiro],
-    })
+        # fim da séria da MD-n
+        placar_final = dict(md.placar)
+        vencedor = md.winner
+        avisar_ambos(s1, s2, {
+            P.TIPO: P.FIM,
+            P.VENCEDOR: vencedor,
+            P.PLACAR: placar_final,
+            P.TABULEIRO: [linha_c[:] for linha_c in md.partida_atual.tabuleiro],
+        })
+    except Exception:
+        traceback.print_exc()
+        print(f"[partida] EXCEÇÃO não tratada — encerrando")
+    finally:
+        print(f"[partida] thread_partida saindo")

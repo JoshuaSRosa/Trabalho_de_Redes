@@ -25,6 +25,12 @@ class Gerenciador_de_filas:
                 s1 = self.filas[melhor_de].pop(0)
                 s2 = self.filas[melhor_de].pop(0)
                 self.parear(s1, s2, melhor_de)
+            else:
+                sessao.enviar({
+                    P.TIPO: P.NA_FILA,
+                    P.MELHOR_DE: melhor_de,
+                    P.MSG: "aguardando oponente...",
+                })
 
     def sair(self, sessao: Sessao):
         with self.lock:
@@ -37,6 +43,10 @@ class Gerenciador_de_filas:
         # fora do lock de fila, para não bloquer o pareamento
         s1.enviar({P.TIPO: P.PAREADO, P.OPONENTE: str(s2.addr)})
         s2.enviar({P.TIPO: P.PAREADO, P.OPONENTE: str(s1.addr)})
+        # marca como "em partida" ANTES de iniciar a thread,
+        # para o roteador_sessao saber que deve repassar para fila_partida
+        s1.partida = "pendente"
+        s2.partida = "pendente"
         t = threading.Thread(
            target=thread_partida,
            args=(s1, s2, melhor_de),

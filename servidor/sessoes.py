@@ -9,7 +9,8 @@ class Sessao:
         self.conn = conn
         self.addr = addr
         self.nickname = None   # Preenchido no login do jogador
-        self.fila_entrada = queue.Queue()  # mensagens recebidas do cliente
+        self.fila_entrada = queue.Queue()  # fila do matchmaking
+        self.fila_partida = queue.Queue()  # mensagens a enviar ao servidor
         self.fila_saida =  queue.Queue()   # mensagens a enviar ao cliente
         self.partida = None    # referência a PartidaThread (None =na fila ou ociosa)
         self.viva = True       # flag para parar as threads
@@ -23,5 +24,7 @@ class Sessao:
             self.viva = False
         # controle para destravar threads bloqueadas em get() em caso de perda de conexão
         self.fila_entrada.put(None)
+        self.fila_partida.put(None)
         self.fila_saida.put(None)
+
     

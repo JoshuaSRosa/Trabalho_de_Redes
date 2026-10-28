@@ -9,6 +9,7 @@ from .sessoes import Sessao
 from .rede import receber_linha, enviar
 from .matchmaking import Gerenciador_de_filas
 from comum import protocolo as P
+import queue
 
 # Definições iniciais do servidor
 HOST = "127.0.0.1"
@@ -48,7 +49,11 @@ def thread_escrita(sessao: Sessao): # Consome sessao.fila_saida e envia para o s
 def roteador_sessao(sessao: Sessao, filas: Gerenciador_de_filas):
     # Consome sessao.fila_entrada, quando a sessao NÃO está em partida
     while sessao.viva:
-        msg = sessao.fila_entrada.get()
+        try:
+            msg = sessao.fila_entrada.get(timeout=0.5)
+        except queue.Empty:
+            continue
+
         if msg is None:
             break
 
