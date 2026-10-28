@@ -35,8 +35,8 @@ def loop_principal(sock, estado):
                 break
             estado.minha_vez.clear()
             try:
-                linha = int(input(">>> SUA VEZ <<<\nLinha (1-3): ")) - 1
-                coluna = int(input("Coluna (1-3): ")) - 1
+                linha = int(input(f"{ui.VERDE}{ui.N}>>> SUA VEZ <<<{ui.R}\n"f"{ui.CIANO}Linha (1-3):{ui.R} ")) - 1
+                coluna = int(input(f"{ui.CIANO}Coluna (1-3):{ui.R} ")) - 1
             except ValueError:
                 print("Digite números de 1 a 3.")
                 estado.minha_vez.set() # tenta de novo
