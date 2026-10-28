@@ -74,7 +74,8 @@ def renderizar(msg, estado):
     
     if tipo == P.STATE:
         nova_rodada = (estado.ultima_partida_vista is not None and msg[P.PARTIDA_NUM] != estado.ultima_partida_vista)
-
+        if msg.get(P.FINALIZADA, False):
+            return
         if nova_rodada: # não limpa: preserva o tabuleiro final acima 
             print(f"\n{N}--- Iniciando Jogo {msg[P.PARTIDA_NUM] + 1} ---{R}")
         else:
@@ -112,8 +113,6 @@ def renderizar(msg, estado):
         limpar()
         print(f"{N}=== FIM DA SÉRIE ==={R}")
         v = msg[P.VENCEDOR]
-        if msg.get(P.TABULEIRO):
-            imprimir_tabuleiro(msg[P.TABULEIRO])
         cor = VERDE if v == estado.meu_jogador else AMAR
         print(f"{cor}{N}Vencedor: {v}{R}")
         pl = msg[P.PLACAR]
