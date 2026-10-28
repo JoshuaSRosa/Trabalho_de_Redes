@@ -57,9 +57,30 @@ def renderizar(msg, estado):
     if tipo == P.WELCOME:
         # Não limpa: PAREADO já limpou. Só complementa o cabeçalho.
         return
-
-    if tipo == P.STATE:
+    
+    if tipo == P.RODADA_FIM:
         limpar()
+        v = msg[P.VENCEDOR]
+        if v == "empate":
+            print(f"{AMAR}{N}=== RODADA {msg[P.PARTIDA_NUM] + 1}: EMPATE ==={R}")
+        else:
+            print(f"{AMAR}{N}=== RODADA {msg[P.PARTIDA_NUM] + 1}: "
+                  f"{v} VENCEU ==={R}")
+        imprimir_tabuleiro(msg[P.TABULEIRO])
+        pl = msg[P.PLACAR]
+        print(f"Placar: P1 {VERM}{pl['jogador1']}{R} x "
+              f"{AZUL}{pl['jogador2']}{R} P2   (empates: {pl['empates']})")
+        return   # NÃO limpa o tabuleiro final antes da troca de Jogo da Série MD3/5
+    
+    if tipo == P.STATE:
+        nova_rodada = (estado.ultima_partida_vista is not None and msg[P.PARTIDA_NUM] != estado.ultima_partida_vista)
+
+        if nova_rodada: # não limpa: preserva o tabuleiro final acima 
+            print(f"\n{N}--- Iniciando Jogo {msg[P.PARTIDA_NUM] + 1} ---{R}")
+        else:
+            limpar()
+
+        estado.ultima_partida_vista = msg[P.PARTIDA_NUM]
 
         # cabeçalho
         meu = estado.meu_jogador or "?"
@@ -91,6 +112,8 @@ def renderizar(msg, estado):
         limpar()
         print(f"{N}=== FIM DA SÉRIE ==={R}")
         v = msg[P.VENCEDOR]
+        if msg.get(P.TABULEIRO):
+            imprimir_tabuleiro(msg[P.TABULEIRO])
         cor = VERDE if v == estado.meu_jogador else AMAR
         print(f"{cor}{N}Vencedor: {v}{R}")
         pl = msg[P.PLACAR]

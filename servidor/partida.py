@@ -61,11 +61,22 @@ def thread_partida(s1: Sessao, s2: Sessao, melhor_de=3):
             atual_sessao.enviar({P.TIPO: P.ERRO, P.MSG: "mensagem inválida"})
             continue
 
+        partida_antes = md.partida_atual
         try:
             md.inserir_jogada(atual_label, linha, coluna)
         except ValueError as e:
             atual_sessao.enviar({P.TIPO: P.ERRO, P.MSG: str(e)})
             continue
+
+        # Se a rodada acabou, envia o tabuleiro final (antes da rodada ser substituída)
+        if partida_antes.encerrada:
+            avisar_ambos(s1, s2, {
+                P.TIPO: P.RODADA_FIM,
+                P.VENCEDOR: partida_antes.vencedor,       # "P1", "P2" ou "empate"
+                P.TABULEIRO: [linha_c[:] for linha_c in partida_antes.tabuleiro],
+                P.PLACAR: dict(md.placar),
+                P.PARTIDA_NUM: md.partida_numero - 1,     # o nº da rodada que acabou
+            })
 
         # jogada válida -> envia o STATE atualizado aos dois jogadores
         avisar_ambos(s1, s2, snapshot(md))
@@ -77,4 +88,5 @@ def thread_partida(s1: Sessao, s2: Sessao, melhor_de=3):
         P.TIPO: P.FIM,
         P.VENCEDOR: vencedor,
         P.PLACAR: placar_final,
+        P.TABULEIRO: [linha_c[:] for linha_c in md.partida_atual.tabuleiro],
     })

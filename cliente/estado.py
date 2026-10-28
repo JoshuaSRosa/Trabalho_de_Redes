@@ -10,6 +10,7 @@ class EstadoCliente:
         self.minha_vez = threading.Event()
         self.ativo = True
         self.melhor_de = None
+        self.ultima_partida_vista = None
 
     def entrar_na_fila(self, melhor_de):
         self.melhor_de = melhor_de
