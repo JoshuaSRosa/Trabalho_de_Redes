@@ -77,12 +77,18 @@ def main():
         client.close()
         return
 
-    threading.Thread(target=thread_recebimento, args=(client, estado),daemon=True).start()
-
+    t = threading.Thread(target=thread_recebimento, args=(client, estado),daemon=True)
+    t.start()
     try:
         loop_principal(client, estado)
     finally:
         estado.ativo = False
+        estado.minha_vez.set()
+        try:
+            client.shutdown(socket.SHUT_RDWR) # Destrava o recv da thread
+        except OSError:
+            pass
+        t.join(timeout=2)
         client.close()
 
 
