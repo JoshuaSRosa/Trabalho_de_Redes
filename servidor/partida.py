@@ -29,7 +29,7 @@ def thread_partida(s1: Sessao, s2: Sessao, melhor_de=3):
     # Mapa sessão -> label do jogador
     labels = {s1: "P1",s2: "P2"}
     # Mapa label -> sessão (para saber quem avisar)
-    por_label = {"P1": s1, "P2": s1}
+    por_label = {"P1": s1, "P2": s2}
 
     # associa cada sessão à partida (para caso de desconexão)
     s1.partida = (threading.current_thread(), por_label)
@@ -72,7 +72,8 @@ def thread_partida(s1: Sessao, s2: Sessao, melhor_de=3):
 
     # fim da séria da MD-n
     placar_final = dict(md.placar)
-    vencedor =md.winneravisar_ambos(s1, s2, {
+    vencedor = md.winner
+    avisar_ambos(s1, s2, {
         P.TIPO: P.FIM,
         P.VENCEDOR: vencedor,
         P.PLACAR: placar_final,

@@ -20,7 +20,7 @@ class JOGO_DA_VELHA:
 
         #Verificação de erros na jogada
         if self.encerrada:
-            raise ValueError("Partiada já encerrada") # Avisa que a partida já foi encerrada
+            raise ValueError("Partida já encerrada") # Avisa que a partida já foi encerrada
         if  jogador != self.jogador_atual(): # Verifica se é a vez do jogador 
             raise ValueError("É a vez do seu adversário") # Avisa que não é a vez do jogador
         if not ((0 <= linha < 3) and (0 <= coluna < 3)): # Verifica se a jogada está dentro do tabuleiro

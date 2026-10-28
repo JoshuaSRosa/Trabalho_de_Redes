@@ -24,6 +24,8 @@ def thread_recebimento(sock, estado):
             break
         estado.processar(msg)
         ui.renderizar(msg, estado)
+        if estado.deve_acordar_main(msg):
+            estado.minha_vez.set()
 
 def loop_principal(sock, estado):
     try:
@@ -32,7 +34,7 @@ def loop_principal(sock, estado):
             if not estado.ativo:
                 break
             try:
-                linha = int(input("Linha (1-3): ")) - 1
+                linha = int(input(">>> SUA VEZ <<<\nLinha (1-3): ")) - 1
                 coluna = int(input("Coluna (1-3): ")) - 1
             except ValueError:
                 print("Digite números de 1 a 3.")

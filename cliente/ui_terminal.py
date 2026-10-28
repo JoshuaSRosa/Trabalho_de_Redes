@@ -22,11 +22,8 @@ def renderizar(msg, estado):
         print(f"\n--- Jogo {msg[P.PARTIDA_NUM] + 1} ---")
         imprimir_tabuleiro(msg[P.TABULEIRO])
         print(f"Placar: {msg[P.PLACAR]}")
-        vez = msg[P.JOGADOR_ATUAL]
-        if vez == estado.meu_jogador:
-            print(f">>> SUA VEZ ({vez}) <<<")
-        else:
-            print(f"Aguardando jogada de {vez}")
+        if msg[P.JOGADOR_ATUAL] != estado.meu_jogador:
+            print(f"Aguardando jogada de {msg[P.JOGADOR_ATUAL]}")
     elif tipo == P.ERRO:
         print(f"\n[ERRO] {msg.get(P.MSG, '')}")
     elif tipo == P.FIM:
