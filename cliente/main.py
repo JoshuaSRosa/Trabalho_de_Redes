@@ -33,6 +33,7 @@ def loop_principal(sock, estado):
             estado.minha_vez.wait()
             if not estado.ativo:
                 break
+            estado.minha_vez.clear()
             try:
                 linha = int(input(">>> SUA VEZ <<<\nLinha (1-3): ")) - 1
                 coluna = int(input("Coluna (1-3): ")) - 1
