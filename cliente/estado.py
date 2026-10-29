@@ -36,14 +36,10 @@ class EstadoCliente:
             self.fase = "finalizado"
             self.ativo = False
             self.minha_vez.set() # impede o bloqueio em wait
-        elif tipo == P.CHEIO:
-            self.fase = "finalizado"
-            self.ativo = False
-            self.minha_vez.set() # impede o bloqueio em wait
 
     def deve_acordar_main(self, msg):  #Retorna True se a main deve sair do wait() para processar.
         tipo = msg.get(P.TIPO)
         if tipo == P.STATE:
             # não acorda se a partida acabou (evita input após FIM)
             return (msg.get(P.JOGADOR_ATUAL) == self.meu_jogador and not msg.get(P.FINALIZADA, False))
-        return tipo in (P.ERRO, P.FIM, P.DESCONECTOU, P.CHEIO)
+        return tipo in (P.ERRO, P.FIM, P.DESCONECTOU)
