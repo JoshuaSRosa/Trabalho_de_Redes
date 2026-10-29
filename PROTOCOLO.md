@@ -1,8 +1,8 @@
 # Especificação do Protocolo de Aplicação
 ## Jogo da Velha Multiplayer
 
-Versão: 1.0
-Data: [28/10/2026]
+Versão: 2.0
+Data: [29/10/2026]
 
 ---
 
@@ -101,7 +101,7 @@ Solicita entrada na fila de matchmaking.
 | Campo | Obrigatório | Tipo | Descrição |
 |---|---|---|---|
 | `tipo` | sim | string | `fila` |
-| `melhor_de` | sim | integer | Formato desejado: 1, 3 ou 5 |
+| `melhor_de` | não (default 3) | integer | Formato desejado: 1, 3 ou 5 |
 
 Quando: logo após conectar, uma única vez.
 
@@ -455,7 +455,7 @@ Se o cliente enviar fila com melhor_de fora de {1, 3, 5}:
 {"tipo": "erro", "msg": "melhor_de inválido: 2"}
 ```
 A sessão não entra na fila. O cliente pode enviar fila novamente com valor
-válido (o cliente atual encerra, mas o protocolo permite retry).
+válido (o cliente atual valida melhor_de localmente antes de enviar (aceita apenas 1, 3, 5) e nunca dispara este caso. O protocolo prevê retry: enviar fila novamente com valor válido.).
 
 ### 5.6 Desconexão
 Detecção em até 1 segundo (via get(timeout=1) + flag viva) para quedas
@@ -481,22 +481,3 @@ recursos do sistema (uma thread por cliente, uma thread por partida).
 Sem criptografia: as mensagens trafegam em texto claro (JSON sobre
 TCP). Adequado ao escopo da disciplina; não usar em produção sem TLS.
 
-text
-```
----
-
-## Antes de considerar pronto
-
-Três verificações que vale fazer relendo o documento contra o código:
-
-1. **A seção 4.5 (Fim de série)** — o servidor envia `rodada_fim` **e** `state` final **e** `fim`? Confirme a ordem no `partida.py`. Pelo código atual, sim: `rodada_fim` sai no `if partida_antes.encerrada`, depois `state` (que terá `finalizada=true`), e o `fim` sai após o `while` terminar. **Se na prática você viu uma ordem diferente, ajuste a spec.**
-
-2. **A seção 5.1** é onde a spec declara uma limitação real do código (JSON malformado derruba a sessão do servidor). Confirme que é isso mesmo — se preferir, **corrija o código** antes de finalizar a spec (envolver o `json.loads` em `try/except` na `thread_leitura`), e aí a spec diz "mensagem descartada, sessão continua". É uma decisão de design.
-
-3. **O `oponente` de `pareado`** — está sendo enviado como `str(addr)`, que resulta em `"('127.0.0.1', 54321)"`. É feio mas funcional. Se quiser melhorar, mude para só IP ou para o nickname (quando houver). Documente o formato atual na spec.
-
-## Depois do `PROTOCOLO.md`
-
-O README sai em **60-70%** em cima dele — copia a visão geral, o transporte, as mensagens, e adiciona os itens operacionais (integrantes, instalação, testes, IA). É mais mecânico. Depois é revisar o `requisitos.txt` para refletir qualquer decisão nova (ex.: se você decidir consertar o JSON malformado), e fechar.
-
-Manda o resultado da revisão do documento (e das três verificações acima) que eu ajudo a refinar. Quando estiver estável, partimos para o README.
