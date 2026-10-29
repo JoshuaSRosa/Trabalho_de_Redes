@@ -1,0 +1,3 @@
+# Sem dependências externas.
+# Todas as bibliotecas utilizadas são da standard library do Python 3.
+# Requer Python 3.8 ou superior (uso de f-strings, type hints e ctypes.windll).

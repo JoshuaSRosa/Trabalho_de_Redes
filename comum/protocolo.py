@@ -4,11 +4,10 @@ STATE        = "state"
 ERRO         = "erro"
 FIM          = "fim"
 DESCONECTOU  = "desconectou"
-CHEIO        = "cheio"
 FILA         = "fila"        # cliente pede para entrar na fila
 NA_FILA      = "na_fila"     # cliente dentro da fila esperando um oponente
 PAREADO      = "pareado"     # servidor avisa que pareou
-SAIU_FILA    = "saiu_fila"
+SAIU_FILA    = "saiu_fila"   # espectativa de uso em opção do cliente sair da lista de espera por partida(Não foi implementada essa funcionalidade)
 
 # chaves de payload
 TIPO         = "tipo"

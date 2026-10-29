@@ -63,7 +63,7 @@ def roteador_sessao(sessao: Sessao, filas: Gerenciador_de_filas):
         # voltou a ser "livre".
         if sessao.partida is not None:
             # devolve a fila para a partida consumir
-            sessao.fila_entrada.put(msg)
+            sessao.fila_partida.put(msg)
             continue
 
         tipo = msg.get(P.TIPO)

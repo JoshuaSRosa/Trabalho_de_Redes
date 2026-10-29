@@ -1,0 +1,216 @@
+Texto gerado por IA para me guiar no cumprimentodos requisitos pedidos no trabalho
+
+
+MAPA DE REQUISITOS → IMPLEMENTAÇÃO
+===================================
+
+Documento de apoio à avaliação: mapeia cada requisito do enunciado
+à sua implementação no código.
+
+Nota sobre convenção: o projeto usa "P1"/"P2" como identificadores de
+jogador atribuídos pelo servidor (não há login por nickname; ver seção
+"Limitações conhecidas").
+
+================================================================================
+1.3. JOGO MULTIPLAYER (opção escolhida)
+================================================================================
+
+- permitir que jogadores se conectem
+  → servidor/main.py (accept loop + threads por sessão)
+  → cliente/main.py (socket.connect)
+
+- permitir a criação ou entrada em uma partida
+  → cliente/main.py: envia {"tipo": "fila", "melhor_de": N} ao conectar
+  → servidor/main.py roteador_sessao: intercepta FILA → matchmaking.entrar()
+  → servidor/matchmaking.py: fila por melhor_de (1, 3, 5)
+
+- gerenciar os jogadores participantes
+  → servidor/sessoes.py: classe Sessao (conn, addr, filas, partida, viva)
+  → servidor/partida.py: por_label = {"P1": s1, "P2": s2}
+
+- controlar o estado da partida
+  → servidor/jogo.py: PARTIDA_MD (série MD-n), JOGO_DA_VELHA (rodada)
+  → servidor/partida.py: snapshot(md) → mensagem STATE
+
+- transmitir as ações dos jogadores
+  → servidor/rede.py: receber_linha, enviar
+  → servidor/partida.py: avisar_ambos(s1, s2, obj)
+
+- validar as ações realizadas
+  → servidor/jogo.py JOGO_DA_VELHA.inserir_jogada: valida turno, limites,
+    casa ocupada, partida encerrada
+  → servidor/jogo.py PARTIDA_MD.inserir_jogada: valida série encerrada
+
+- impedir ações inválidas
+  → servidor/jogo.py: ValueError com mensagem específica
+  → servidor/partida.py: captura ValueError → envia {"tipo": "erro"}
+  → cliente/estado.py: trata erro → reativa o prompt para nova tentativa
+
+- manter os participantes sincronizados
+  → servidor/partida.py: avisar_ambos em cada jogada válida (STATE)
+  → cliente/estado.py: atualiza estado local
+  → cliente/ui_terminal.py: renderiza board atualizado
+
+- detectar o término da partida
+  → servidor/jogo.py JOGO_DA_VELHA: linha/coluna/diagonal/cheio →
+    self.encerrada = True, self.vencedor definido
+  → servidor/jogo.py PARTIDA_MD: vitorias_necessarias ou melhorD rodadas
+    → self.finished = True, self.winner definido
+  → servidor/partida.py: verifica partida_antes.encerrada → RODADA_FIM
+
+- informar o resultado
+  → servidor/partida.py: RODADA_FIM (resultado da rodada) + FIM (resultado
+    da série)
+  → cliente/ui_terminal.py: renderização colorida com tabuleiro final
+
+- permitir o início de novas partidas
+  → servidor/jogo.py PARTIDA_MD.iniciar_proxima_partida(): nova rodada
+    automática da série (alterna quem começa via 'quem_comeca')
+  → Para nova SÉRIE: cliente reconecta (limitação; ver "Limitações")
+
+================================================================================
+4. REQUISITOS MÍNIMOS
+================================================================================
+
+- utilizar sockets
+  → servidor/rede.py, cliente/rede.py
+  → socket.AF_INET + socket.SOCK_STREAM (TCP nativo, sem frameworks)
+
+- permitir comunicação entre múltiplos participantes
+  → servidor/main.py: threads por cliente (leitura + escrita + roteador)
+  → servidor/matchmaking.py: filas paralelas por melhor_de
+  → servidor/partida.py: thread por partida → N partidas simultâneas
+
+- definir e implementar protocolo de aplicação próprio
+  → comum/protocolo.py: constantes de tipo e campos
+  → PROTOCOLO.md: especificação completa (entregável 5.2)
+  → JSON delimitado por '\n' sobre TCP
+
+- tratar mensagens ou requisições inválidas
+  → servidor/main.py roteador_sessao: responde {"tipo": "erro"} para tipo
+    desconhecido quando sessão está fora de partida
+  → servidor/partida.py: valida presença de linha/coluna → {"tipo": "erro"}
+  → servidor/jogo.py: validação semântica (ValueError)
+  → cliente/main.py thread_recebimento: captura JSONDecodeError e
+    UnicodeDecodeError
+  → LIMITAÇÃO: thread_leitura do servidor NÃO captura JSONDecodeError
+    (apenas OSError). JSON malformado derruba a sessão, mas não o servidor.
+
+- tratar desconexões e falhas de comunicação
+  → servidor/sessoes.py Sessao.encerrar(): sentinela None em fila_entrada,
+    fila_partida e fila_saida → destrava consumidores
+  → servidor/partida.py: get(timeout=1) + checagem viva=False detecta
+    queda brusca (kill -9, cabo puxado) em até 1s
+  → servidor/partida.py: envia DESCONECTOU ao sobrevivente
+  → cliente/main.py main(): shutdown + join(timeout=2) + close no finally
+  → cliente/ui_terminal.py: renderiza DESCONECTOU
+  → LIMITAÇÃO: reconexão não implementada (ver "Limitações")
+
+- utilizar mecanismos de concorrência ou multiplexação
+  → servidor/main.py: 3 threads por sessão (leitura, escrita, roteador)
+  → servidor/partida.py: 1 thread por partida
+  → servidor/matchmaking.py: threading.Lock em filas de pareamento
+  → servidor/sessoes.py: queue.Queue (fila_entrada, fila_partida, fila_saida)
+  → cliente/main.py: thread_recebimento + thread principal com threading.Event
+
+- implementar corretamente as regras e o estado
+  → servidor/jogo.py: PARTIDA_MD e JOGO_DA_VELHA (bloco de teste comentado
+    valida séries MD1/MD3/MD5 isoladamente)
+  → Bateria de testes de integração: MD1, MD3, MD5, empates, desistência
+
+================================================================================
+1.5. CONCEITOS DA DISCIPLINA DEMONSTRADOS
+================================================================================
+
+- criação e utilização de sockets
+  → servidor/main.py: socket(), bind(), listen(), accept()
+  → cliente/main.py: socket(), connect()
+  → rede.py (ambos): recv(), sendall()
+
+- comunicação entre múltiplos participantes
+  → coberto acima (threads + filas por sessão)
+
+- definição de protocolo de aplicação
+  → coberto acima (comum/protocolo.py + PROTOCOLO.md)
+
+- envio e recebimento de diferentes tipos de mensagem
+  → comum/protocolo.py: FILA, NA_FILA, PAREADO, WELCOME, STATE, ERRO,
+    RODADA_FIM, FIM, DESCONECTOU
+  → PROTOCOLO.md: catálogo completo
+
+- gerenciamento de estado
+  → servidor/jogo.py: PARTIDA_MD, JOGO_DA_VELHA
+  → cliente/estado.py: EstadoCliente (máquina de estados)
+  → cliente/ui_terminal.py: estado.ultima_partida_vista (transição de rodada)
+
+- tratamento de erros
+  → coberto acima
+
+- tratamento de desconexões
+  → coberto acima
+
+- concorrência ou multiplexação
+  → coberto acima (threads + queues)
+
+- utilização adequada de TCP, UDP ou ambos
+  → TCP exclusivamente
+  → Justificativa (README/PROTOCOLO.md): jogo em turnos, mensagens pequenas
+    e de baixa frequência, necessidade de entrega confiável e ordenada.
+    UDP não se justifica; mistura TCP/UDP não traz ganho.
+
+================================================================================
+LIMITAÇÕES CONHECIDAS (não implementadas — documentar no README)
+================================================================================
+
+- Reconexão de jogador após desconexão
+  → Não implementada. O enunciado exige "tratamento de desconexão" (detecção
+    + notificação + encerramento limpo — cumprido). Reconexão persistente
+    (retomar partida após reconectar) é funcionalidade ADICIONAL, planejada
+    na proposta inicial, não implementada por priorização de tempo.
+
+- Tolerância a falha do servidor (persistência de estado)
+  → Fora do escopo. Estado em memória; queda do servidor encerra partidas
+    em andamento.
+
+- Interface gráfica
+  → Interface via terminal com cores ANSI. Permitido pelo enunciado
+    ("complexidade da interface não será o foco da avaliação").
+
+- JSON malformado no servidor
+  → thread_leitura captura apenas OSError, não JSONDecodeError.
+    Cliente malicioso/bugado pode derrubar a própria sessão, mas não o
+    servidor (thread morre isolada; demais sessões continuam).
+
+- Nova série sem reconectar
+  → Após FIM, o cliente encerra a conexão. Para jogar nova série, é
+    necessário reabrir o cliente.
+
+================================================================================
+CÓDIGO PRESENTE MAS NÃO UTILIZADO
+================================================================================
+
+- comum/protocolo.py: SAIU_FILA
+  → Tratado em roteador_sessao (filas.sair), mas o cliente não oferece
+    opção de "cancelar espera". Código morto do lado do cliente.
+
+- servidor/sessoes.py: campo self.nickname
+  → Definido mas nunca preenchido. Previsto para login opcional (não
+    implementado). Identificação é feita por "P1"/"P2" atribuídos no WELCOME.
+
+- cliente/ui_terminal.py: os.system("")
+  → Aviso do linter (Pylance) sobre "deprecation" — não é deprecation real,
+    é hack padrão para habilitar ANSI no Windows. Alternativa mais limpa:
+    ctypes.windll.kernel32.SetConsoleMode(...). Funcional como está.
+
+================================================================================
+PONTOS A VERIFICAR ANTES DA ENTREGA
+================================================================================
+
+1. Remoção de prints de debug residuais
+   → partida.py ainda tem traceback.print_exc() no except (bom, mantenha)
+     e print("[partida] EXCEÇÃO não tratada") — pode virar logging.
+   → Se houver prints temporários em outras partes, remover.
+
+2. Compactação do projeto
+   → Gerar .tar.gz a partir do GitHub (sem __pycache__, .vscode, .pyc).
+   → Renomear no padrão MATRICULA1_MATRICULA2.tar.gz.

@@ -29,8 +29,6 @@ def thread_partida(s1: Sessao, s2: Sessao, melhor_de=3):
     try:
         md = PARTIDA_MD("P1","P2",melhor_de)
 
-        # Mapa sessão -> label do jogador
-        labels = {s1: "P1",s2: "P2"}
         # Mapa label -> sessão (para saber quem avisar)
         por_label = {"P1": s1, "P2": s2}
 
@@ -103,5 +101,3 @@ def thread_partida(s1: Sessao, s2: Sessao, melhor_de=3):
     except Exception:
         traceback.print_exc()
         print(f"[partida] EXCEÇÃO não tratada — encerrando")
-    finally:
-        print(f"[partida] thread_partida saindo")
