@@ -339,4 +339,3 @@ PROTOCOLO.md — especificação completa do protocolo de aplicação
 
 requisitos.txt — mapa de requisitos do enunciado → implementação no
 código.
-Quando o `README.md` estiver preenchido, sua entrega está completa: código + `README.md` + `PROTOCOLO.md` + `requisitos.txt` + `requirements.txt`. Os 5.1 e 5.2 do enunciado estão 
